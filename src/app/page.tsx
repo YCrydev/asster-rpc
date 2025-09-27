@@ -6,7 +6,7 @@ import { Play, Loader2, CheckCircle, XCircle, Info, Network, Zap, Database, User
 import axios from 'axios';
 
 // Asster RPC endpoint
-const ASSTER_RPC_URL = 'http://18.220.17.102/';
+const ASSTER_RPC_URL = 'http://rpc.asster.lol/';
 
 interface RPCResult {
   method: string;
