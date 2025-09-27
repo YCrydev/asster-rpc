@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Connection, PublicKey, LAMPORTS_PER_SOL, clusterApiUrl } from '@solana/web3.js';
 import { Play, Loader2, CheckCircle, XCircle, Info, Network, Zap, Database, Users, Coins } from 'lucide-react';
 import axios from 'axios';
 
@@ -10,14 +9,14 @@ const ASSTER_RPC_URL = 'http://rpc.asster.lol/';
 
 interface RPCResult {
   method: string;
-  result: any;
+  result: unknown;
   error?: string;
   loading: boolean;
   timestamp?: string;
 }
 
 export default function AssterRPCTester() {
-  const [connection, setConnection] = useState<Connection | null>(null);
+  const [connection, setConnection] = useState<boolean>(false);
   const [results, setResults] = useState<Record<string, RPCResult>>({});
   const [isConnected, setIsConnected] = useState(false);
   const [corsStatus, setCorsStatus] = useState<{ working: boolean; error?: string } | null>(null);
@@ -35,7 +34,7 @@ export default function AssterRPCTester() {
 
   useEffect(() => {
     // Don't use Solana Connection due to CORS headers
-    setConnection(true as any); // Just set a truthy value to enable UI
+    setConnection(true); // Just set a truthy value to enable UI
     testConnection();
     testCORS();
   }, []);
@@ -75,15 +74,20 @@ export default function AssterRPCTester() {
       } else {
         setCorsStatus({ working: false, error: `HTTP ${response.status}: ${response.statusText}` });
       }
-    } catch (error: any) {
-      if (error.response) {
-        setCorsStatus({ working: false, error: `HTTP ${error.response.status}: ${error.response.statusText}` });
-      } else if (error.request) {
-        setCorsStatus({ working: false, error: 'Network request failed - possible CORS issue' });
-      } else if (error.message.includes('CORS') || error.message.includes('cors')) {
-        setCorsStatus({ working: false, error: 'CORS policy blocks this request' });
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          setCorsStatus({ working: false, error: `HTTP ${error.response.status}: ${error.response.statusText}` });
+        } else if (error.request) {
+          setCorsStatus({ working: false, error: 'Network request failed - possible CORS issue' });
+        }
       } else {
-        setCorsStatus({ working: false, error: error.message });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage.includes('CORS') || errorMessage.includes('cors')) {
+          setCorsStatus({ working: false, error: 'CORS policy blocks this request' });
+        } else {
+          setCorsStatus({ working: false, error: errorMessage });
+        }
       }
     }
   };
@@ -101,7 +105,7 @@ export default function AssterRPCTester() {
   };
 
   // Helper function for JSON-RPC calls using Axios
-  const makeRPCCall = async (method: string, params: any[] = []) => {
+  const makeRPCCall = async (method: string, params: unknown[] = []) => {
     try {
       const response = await axios.post(ASSTER_RPC_URL, {
         jsonrpc: '2.0',
@@ -117,21 +121,22 @@ export default function AssterRPCTester() {
         throw new Error(response.data.error.message || 'RPC Error');
       }
       return response.data.result;
-    } catch (error: any) {
-      if (error.response) {
-        // Server responded with error status
-        throw new Error(`HTTP ${error.response.status}: ${error.response.statusText}`);
-      } else if (error.request) {
-        // Request made but no response received
-        throw new Error('Network error - no response received');
-      } else {
-        // Something else happened
-        throw new Error(error.message || 'Unknown error');
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          // Server responded with error status
+          throw new Error(`HTTP ${error.response.status}: ${error.response.statusText}`);
+        } else if (error.request) {
+          // Request made but no response received
+          throw new Error('Network error - no response received');
+        }
       }
+      // Something else happened
+      throw new Error(error instanceof Error ? error.message : 'Unknown error');
     }
   };
 
-  const executeRPC = async (method: string, rpcCall: () => Promise<any>) => {
+  const executeRPC = async (method: string, rpcCall: () => Promise<unknown>) => {
     if (!connection) return;
 
     updateResult(method, { loading: true, error: undefined });
@@ -143,10 +148,10 @@ export default function AssterRPCTester() {
         loading: false,
         error: undefined 
       });
-    } catch (error: any) {
+    } catch (error) {
       updateResult(method, { 
         loading: false, 
-        error: error.message || 'Unknown error',
+        error: error instanceof Error ? error.message : 'Unknown error',
         result: null 
       });
     }
@@ -271,8 +276,8 @@ export default function AssterRPCTester() {
               const result = await makeRPCCall('getProgramAccounts', [
                 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
               ]);
-              return { tokenAccountsCount: result.length };
-            } catch (e) {
+              return { tokenAccountsCount: Array.isArray(result) ? result.length : 0 };
+            } catch {
               return { error: 'No token accounts found or token program not available' };
             }
           }
@@ -284,7 +289,8 @@ export default function AssterRPCTester() {
             const result = await makeRPCCall('getProgramAccounts', [
               '11111111111111111111111111111112'
             ]);
-            return { accountCount: result.length, accounts: result.slice(0, 3) };
+            const accounts = Array.isArray(result) ? result : [];
+            return { accountCount: accounts.length, accounts: accounts.slice(0, 3) };
           }
         }
       ]
@@ -301,7 +307,7 @@ export default function AssterRPCTester() {
     }
   };
 
-  const formatResult = (result: any): string => {
+  const formatResult = (result: unknown): string => {
     if (result === null || result === undefined) return 'null';
     if (typeof result === 'object') {
       return JSON.stringify(result, null, 2);
