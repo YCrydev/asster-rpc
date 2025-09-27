@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { Play, Loader2, CheckCircle, XCircle, Info, Network, Zap, Database, Users, Coins } from 'lucide-react';
 import axios from 'axios';
 
-// Asster RPC endpoint
-const ASSTER_RPC_URL = 'http://rpc.asster.lol/';
+// Asster RPC proxy endpoint (uses Next.js API route to avoid HTTPS/HTTP mixed content)
+const ASSTER_RPC_URL = '/api/rpc';
 
 interface RPCResult {
   method: string;
@@ -64,8 +64,8 @@ export default function AssterRPCTester() {
 
   const testCORS = async () => {
     try {
-      // Test basic CORS with a simple health check using Axios
-      const response = await axios.get(`${ASSTER_RPC_URL}health`, {
+      // Test health check through proxy API
+      const response = await axios.get(`${ASSTER_RPC_URL}?endpoint=health`, {
         timeout: 5000
       });
       
@@ -79,15 +79,11 @@ export default function AssterRPCTester() {
         if (error.response) {
           setCorsStatus({ working: false, error: `HTTP ${error.response.status}: ${error.response.statusText}` });
         } else if (error.request) {
-          setCorsStatus({ working: false, error: 'Network request failed - possible CORS issue' });
+          setCorsStatus({ working: false, error: 'Network request failed - possible proxy issue' });
         }
       } else {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        if (errorMessage.includes('CORS') || errorMessage.includes('cors')) {
-          setCorsStatus({ working: false, error: 'CORS policy blocks this request' });
-        } else {
-          setCorsStatus({ working: false, error: errorMessage });
-        }
+        setCorsStatus({ working: false, error: errorMessage });
       }
     }
   };
@@ -172,7 +168,7 @@ export default function AssterRPCTester() {
           name: 'healthCheck',
           description: 'Check health endpoint (/health)',
           call: async () => {
-            const response = await axios.get(`${ASSTER_RPC_URL}health`, {
+            const response = await axios.get(`${ASSTER_RPC_URL}?endpoint=health`, {
               timeout: 5000
             });
             if (response.status === 200) {
@@ -452,7 +448,7 @@ export default function AssterRPCTester() {
             Testing RPC calls to Asster network at rpc.asster.lol
           </p>
           <p className="text-xs mt-2 opacity-70">
-            Actual endpoint: {ASSTER_RPC_URL}
+            Via secure HTTPS proxy: {ASSTER_RPC_URL} → http://18.220.17.102/
           </p>
         </div>
       </div>
